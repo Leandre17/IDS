@@ -5,7 +5,6 @@ let mqttClient;
 let messageReceived;
 let randomId = "p5js_client_" + Math.random().toString(36).substr(2, 5);
 
-
 function setup() {
   createCanvas(400, 400);
   textSize(16);
@@ -27,14 +26,14 @@ function setup() {
     calculateTime(`${getTodayDate()}T${Arrival}`, `${getTodayDate()}T${departure}`);
   });
   
-  // Setup MQTT connection when the sketch starts
   setupMQTT();
 }
 
 function createLabelAndInput(labelText, x, y, defaultValue) {
   let label = createSpan(labelText);
-  label.position(x, y);
   let inputVar = createInput(defaultValue);
+
+  label.position(x, y);
   inputVar.position(x + 150, y);
   return inputVar;
 }
@@ -50,8 +49,7 @@ function fetchTrip() {
   let destId = destinationInput.value();
   let date = dateInput.value();
   let time = timeInput.value();
-
-  let url = `https://www.rejseplanen.dk/api/trip?originId=${originId}&destId=${destId}&date=${date}&time=${time}&format=json&accessId=52251f40-43dc-4794-ada3-c60e7e0efed3&lang=en&numB=0&numF=1&rtMode=REALTIME&tariff=0`;
+  let url = `https://www.rejseplanen.dk/api/trip?originId=${originId}&destId=${destId}&date=${date}&time=${time}&format=json&accessId=52251f40-43dc-4794-ada3-c60e7e0efed3&numB=0&numF=1&rtMode=REALTIME`;
 
   console.log("API Request URL:", url);
   loadJSON(url, displayTrip, handleError);
@@ -68,8 +66,7 @@ function displayTrip(data) {
     departure = end;
     let platformStart = origin.platform ? origin.platform.text : "N/A";
     let platformEnd = destination.platform ? destination.platform.text : "N/A";
-    let notes = trip.LegList.Leg[0].Notes ? trip.LegList.Leg[0].Notes.Note.map(n => n.txtN).join(", ") : "No additional info";
-    resultText = `Trip found!\nDeparture: ${start} (Platform ${platformStart})\nArrival: ${end} (Platform ${platformEnd})\nNotes: ${notes}`;
+    resultText = `Trip found!\nDeparture: ${start} (Platform ${platformStart})\nArrival: ${end} (Platform ${platformEnd})`;
 
     // Start interval to calculate time every 30s
     if (window.timeInterval) clearInterval(window.timeInterval);
@@ -102,7 +99,6 @@ function calculateTime(departureTime, arrivalTime) {
     percentCompleted = 100;
   }
   
-  // Send trip progress percentage via MQTT
   sendInfo(percentCompleted);
   console.log(timeText);
 }
@@ -127,18 +123,14 @@ function getCurrentTime() {
 }
 
 function sendInfo(progress) {
-  // Send the progress information via MQTT
   if (mqttClient && mqttClient.connected) {
     const tripInfo = {
       progress: progress,
-      origin: originInput.value(),
-      destination: destinationInput.value(),
       departureTime: Arrival,
       arrivalTime: departure,
       clientId: randomId
     };
-    
-    // Publish to the trip progress topic
+
     mqttClient.publish("ruc-rejseplanen/trip-progress", JSON.stringify(tripInfo));
     console.log("Published trip progress:", progress + "%");
   } else {
@@ -155,7 +147,6 @@ function setupMQTT() {
     password: "public",
   });
 
-
   mqttClient.on("connect", onConnect);
   mqttClient.on("message", onMessageArrived);
   mqttClient.on("error", onFailure);
@@ -164,19 +155,6 @@ function setupMQTT() {
 
 function onConnect() {
   console.log("Successfully connected to MQTT broker at ruc-rejseplanen.cloud.shiftr.io");
-  // Subscribe to relevant topics
-  mqttClient.subscribe("ruc-rejseplanen/trip-updates");
-  mqttClient.subscribe("ruc-rejseplanen/system-messages");
-  
-  // Send a connection notification
-  const connectMessage = {
-    type: "connection",
-    status: "online",
-    clientId: randomId,
-    timestamp: new Date().toISOString()
-  };
-  
-  mqttClient.publish("ruc-rejseplanen/connections", JSON.stringify(connectMessage));
 }
 
 function onMessageArrived(topic, message) {
@@ -193,16 +171,7 @@ function onMessageArrived(topic, message) {
   }
   
   console.log(`Message Arrived on topic ${topic}: ${msg}`);
-  messageReceived = msg;
-  
-  // Handle different message types based on topic
-  if (topic === "ruc-rejseplanen/trip-updates") {
-    // Handle trip updates
-    console.log("Received trip update");
-  } else if (topic === "ruc-rejseplanen/system-messages") {
-    // Handle system messages
-    console.log("Received system message");
-  }
+
 }
 
 function sendMQTTMessage(topic, payload) {
